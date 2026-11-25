@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#10161d" id="theme-color-meta">
+    <meta name="description" content="Marcador de truco com voz, mão de 11, escurinha e histórico offline.">
+    <title>Marcador Truco Acker</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+    <main class="scoreboard">
+        <header class="app-header">
+            <h1>Truco Acker</h1>
+            <div class="header-actions">
+                <button type="button" id="sound-toggle-btn" class="icon-button" aria-label="Som" aria-pressed="true" title="Som">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3Z"/><path class="sound-on" d="M16 9a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/><path class="sound-off" d="m16 10 5 5m0-5-5 5"/></svg>
+                </button>
+                <button type="button" id="options-btn" class="icon-button" aria-label="Opções" title="Opções">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+            </div>
+        </header>
+
+        <section class="match-bar" aria-label="Tempo e partidas ganhas">
+            <div><span class="muted">Tempo</span><strong id="current-timer-display" role="timer">00:00</strong></div>
+            <div><span class="muted">Partidas ganhas</span><strong id="match-wins-display"><span id="match-wins-nos" class="nos">0</span> <span class="versus">×</span> <span id="match-wins-eles" class="eles">0</span></strong></div>
+        </section>
+
+        <div class="rule-banner" id="rule-banner" hidden>
+            <strong id="rule-title"></strong>
+            <span id="rule-description"></span>
+            <div id="hand-decision" class="decision-actions" hidden>
+                <button type="button" id="accept-hand" class="primary">Aceitar</button>
+                <button type="button" id="decline-hand">Correr</button>
+            </div>
+        </div>
+
+        <section class="teams" aria-label="Placar atual">
+            <section class="team team-nos" aria-labelledby="team-name-nos">
+                <h2 id="team-name-nos">Nós</h2>
+                <div id="score-nos" class="score nos">0</div>
+                <div class="controls" data-team-controls="0">
+                    <button type="button" class="add" data-team="0" data-amount="1">+1</button>
+                    <button type="button" class="remove" data-team="0" data-amount="-1">−1</button>
+                    <button type="button" class="truco-btn" data-team="0" data-amount="3">+3</button>
+                    <button type="button" class="truco-btn" data-team="0" data-amount="6">+6</button>
+                    <button type="button" class="truco-btn" data-team="0" data-amount="9">+9</button>
+                    <button type="button" class="truco-btn" data-team="0" data-amount="12">+12</button>
+                </div>
+            </section>
+            <section class="team team-eles" aria-labelledby="team-name-eles">
+                <h2 id="team-name-eles">Eles</h2>
+                <div id="score-eles" class="score eles">0</div>
+                <div class="controls" data-team-controls="1">
+                    <button type="button" class="add" data-team="1" data-amount="1">+1</button>
+                    <button type="button" class="remove" data-team="1" data-amount="-1">−1</button>
+                    <button type="button" class="truco-btn" data-team="1" data-amount="3">+3</button>
+                    <button type="button" class="truco-btn" data-team="1" data-amount="6">+6</button>
+                    <button type="button" class="truco-btn" data-team="1" data-amount="9">+9</button>
+                    <button type="button" class="truco-btn" data-team="1" data-amount="12">+12</button>
+                </div>
+            </section>
+        </section>
+
+        <div class="game-actions">
+            <button type="button" id="undo-button" disabled>↶ Desfazer</button>
+            <button type="button" id="new-game-btn" class="primary" hidden>Próxima partida</button>
+        </div>
+        <p id="game-message" class="sr-only" role="status" aria-atomic="true"></p>
+        <p id="storage-message" class="notice" hidden role="status">O armazenamento está indisponível. Mantenha o app aberto para preservar esta partida.</p>
+
+        <section class="dealer-bar" aria-label="Embaralhador">
+            <div><span class="muted">Embaralhador</span><strong id="current-dealer-name">Jogador 1</strong></div>
+            <button type="button" id="next-dealer-btn">Próximo</button>
+        </section>
+
+        <details class="history" id="history">
+            <summary>Histórico <span class="muted" id="history-count"></span></summary>
+            <div class="history-content">
+                <p class="muted">Placar anterior <strong id="prev-score-display">—</strong></p>
+                <ol id="duration-history-list" reversed></ol>
+                <p id="empty-history" class="muted">Nenhuma partida concluída.</p>
+                <div class="secondary-actions">
+                    <button type="button" id="copy-history-btn">Copiar resumo</button>
+                    <button type="button" id="export-history-btn">WhatsApp</button>
+                </div>
+                <p id="history-message" class="notice" role="status" hidden></p>
+            </div>
+        </details>
+        <footer>Desenvolvido por Jacson A Duarte</footer>
+    </main>
+
+    <dialog id="options-dialog" aria-labelledby="options-title">
+        <div class="dialog-header">
+            <h2 id="options-title">Opções</h2>
+            <button type="button" class="icon-button close-dialog" aria-label="Fechar opções">×</button>
+        </div>
+        <div class="option-group">
+            <button type="button" id="edit-players-btn">Editar jogadores</button>
+            <button type="button" id="edit-teams-btn">Editar equipes</button>
+            <button type="button" id="change-game-mode-btn">Trocar para 2 jogadores</button>
+            <button type="button" id="rules-toggle-btn">Regras do truco</button>
+        </div>
+        <div class="option-group">
+            <button type="button" id="theme-toggle-btn">Tema claro</button>
+            <button type="button" id="size-toggle-btn" aria-pressed="false"><span aria-hidden="true">Aa</span> Texto maior</button>
+            <button type="button" id="install-btn">Instalar na tela inicial</button>
+            <button type="button" id="update-btn" hidden>Aplicar atualização</button>
+            <button type="button" id="share-app-btn">Compartilhar o app</button>
+            <button type="button" id="privacy-btn">Privacidade</button>
+        </div>
+        <div class="option-group">
+            <button type="button" id="reset-game-btn">Reiniciar partida</button>
+            <button type="button" id="reset-all-btn" class="danger">Zerar placar e histórico</button>
+        </div>
+        <p id="offline-status" class="notice" role="status">Verificando disponibilidade offline…</p>
+        <p id="options-message" class="notice" role="status" hidden></p>
+    </dialog>
+
+    <dialog id="names-dialog" aria-labelledby="names-title">
+        <div class="dialog-header">
+            <h2 id="names-title" tabindex="-1">Editar jogadores</h2>
+            <button type="button" id="names-close" class="icon-button close-dialog" aria-label="Fechar edição">×</button>
+        </div>
+        <form id="names-form">
+            <p id="names-help" class="muted"></p>
+            <div id="name-fields"></div>
+            <div class="secondary-actions">
+                <button type="button" id="names-cancel" class="close-dialog">Cancelar</button>
+                <button type="submit" id="names-submit" class="primary">Salvar</button>
+            </div>
+            <p id="name-message" class="notice" role="status" hidden></p>
+        </form>
+    </dialog>
+
+    <dialog id="info-dialog" aria-labelledby="info-title">
+        <div class="dialog-header">
+            <h2 id="info-title"></h2>
+            <button type="button" class="icon-button close-dialog" aria-label="Fechar informações">×</button>
+        </div>
+        <div id="info-content"></div>
+        <button type="button" class="close-dialog wide">Entendi</button>
+    </dialog>
+
+    <dialog id="rulesModal" aria-labelledby="rules-title">
+        <div class="dialog-header">
+            <h2 id="rules-title">Regras do Truco</h2>
+            <button type="button" class="icon-button close-dialog" aria-label="Fechar regras">×</button>
+        </div>
+        <div class="rules-scroll-area">
+                <h2>Regras do Truco (Baralho Espanhol - SC)</h2>
+                <p>Bem-vindo ao Truco! Aqui estão as regras básicas para você aprender a jogar, baseadas no estilo
+                    jogado em Santa Catarina com baralho espanhol (40 cartas, sem 8, 9, 10 e curingas).</p>
+
+                <h3>1. O Objetivo</h3>
+                <p>O objetivo do jogo é ser a primeira equipe (ou jogador) a alcançar <strong>12 pontos</strong>.</p>
+
+                <h3>2. O Baralho e as Manilhas</h3>
+                <p>Joga-se com o baralho espanhol limpo. A ordem de força das cartas (da mais forte para a mais fraca) é
+                    fixa, mas as <strong>Manilhas</strong> (as 4 cartas mais fortes do jogo) mudam a cada rodada,
+                    dependendo do "Vira" (a carta que é virada na mesa após a distribuição).</p>
+
+                <p>As Manilhas são sempre as cartas <strong>imediatamente acima do Vira</strong>.</p>
+                <p class="highlight-box"><strong>Exemplo:</strong> Se o Vira for um 5, as Manilhas serão os 6. Se o Vira
+                    for um 7, as Manilhas serão os 10 (Valetes), pois o 8 e o 9 não jogam neste baralho. Se o Vira é um
+                    12, as Manilhas serão o 1, que é considerado a carta mais forte após o 12.</p>
+
+                <h4>Desempate de Manilhas e Naipes</h4>
+                <p>As manilhas têm força diferente baseada no seu Naipe (símbolo). Por isso, <strong>Manilhas nunca
+                        "empacham" (empatam)!</strong> Se dois jogadores jogarem uma manilha, a de naipe mais forte
+                    sempre vence.</p>
+
+                <div class="order-box">
+                    <p><strong>Ordem das Manilhas (da mais forte para a mais fraca):</strong></p>
+                    <ol>
+                        <li><strong>Zap</strong> (Paus)</li>
+                        <li><strong>Copas</strong> (Copas)</li>
+                        <li><strong>Espadilha</strong> (Espadas)</li>
+                        <li><strong>Ouros</strong> (Ouros)</li>
+                    </ol>
+                </div>
+
+                <p><strong>Ordem das Cartas Normais (abaixo das Manilhas):</strong><br>
+                    3 > 2 > 1 (Ás) > 12 (Rei) > 11 (Cavalo) > 10 (Valete) > 7 > 6 > 5 > 4</p>
+
+                <h3>3. Como Jogar (A Mão)</h3>
+                <ul>
+                    <li>Cada jogador recebe 3 cartas.</li>
+                    <li>A "Mão" (rodada) é dividida em até 3 "Tombos" (jogadas).</li>
+                    <li>Após embaralhar as cartas, passa-se o monte para o jogador da Esquerda fazer um corte simples no
+                        baralho. O jogador que cortou pega uma carta (quando em equipe, ele olha esta carta cortada,
+                        passa para o jogador da sua equipe e devolve o monte para quem embaralhou).</li>
+                    <li>O jogador à direita de quem embaralhou começa jogando uma carta. O maior valor de carta ganha a
+                        jogada (o "Tombo").</li>
+                    <li>A equipe que ganhar <strong>2 dos 3 Tombos</strong> vence a Mão e ganha <strong>1 ponto</strong>
+                        no placar.</li>
+                </ul>
+
+                <h4>O Empate ou "Empachada"</h4>
+                <p>Quando duas cartas normais de mesmo valor (que não sejam manilhas) são jogadas como as maiores da
+                    mesa por adversários, a jogada <strong>"empacha" (empata)</strong> e vai valer quem ganhar o próximo
+                    "Tombo" (jogada)!</p>
+                <ul>
+                    <li><strong>Empachou o 1º Tombo:</strong> Ninguém ganhou ainda. A próxima jogada decidirá a mão.
+                        Quem ganhar o 2º Tombo vence a Mão inteira.</li>
+                    <li><strong>Empachou o 2º ou 3º Tombo:</strong> A equipe que ganhou o 1º Tombo tem vantagem e já
+                        vence a mão toda.</li>
+                    <li><strong>Empatou os 3 Tombos:</strong> Ninguém ganha ponto, a Mão é anulada e o baralho roda para
+                        o próximo.</li>
+                </ul>
+
+                <h3>4. O Truco</h3>
+                <p>Qualquer jogador, na sua vez, pode pedir <strong>"Truco!"</strong>. Isso é um desafio que aumenta o
+                    valor da mão de 1 ponto para 3 pontos. A equipe adversária pode:</p>
+                <ul>
+                    <li><strong>Aceitar:</strong> A mão passa a valer 3 pontos.</li>
+                    <li><strong>Correr:</strong> A equipe que pediu o Truco ganha 1 ponto e a mão acaba na hora.</li>
+                    <li><strong>Pedir Seis:</strong> Aumenta a aposta para 6 pontos (a vez de resposta volta para a
+                        equipe que pediu Truco inicialmente). Os aumentos possíveis são: Truco (3) > Seis (6) > Nove (9)
+                        > Doze (12).</li>
+                </ul>
+
+                <div class="warning-box">
+                    <strong>Atenção: Truco Empachado</strong><br>
+                    Se você pedir Truco, a outra equipe Aceitar, e logo em seguida a sua carta empachar com a do
+                    adversário, a sua equipe <strong>perde a rodada e os 3 pontos automaticamente!</strong> Quem pede
+                    Truco tem a obrigação de "matar" (jogar uma carta estritamente maior). <em>(Lembrando que manilha
+                        nunca empacha, vence a manilha com maior naipe).</em>
+                </div>
+
+                <h3>5. Mão de 11</h3>
+                <p>Quando uma equipe chega a exatos 11 pontos, ela joga a "Mão de 11". Todas as equipes podem olhar as
+                    cartas de seus parceiros (se jogar em dupla) mas <strong>somente quem está com 11 pontos</strong>
+                    irá decidir se quer jogar a rodada:</p>
+                <ul>
+                    <li><strong>Equipe com 11 pontos Aceitar a rodada:</strong> A mão automaticamente passa a valer 3
+                        pontos. <em>Obs: Ninguém pode pedir Truco!</em></li>
+                    <li><strong>Correr:</strong> A equipe adversária ganha 1 ponto sem ninguém jogar as cartas.</li>
+                </ul>
+
+                <h3>6. Empate em 11 a 11 (Escurinha ou Escurona)</h3>
+                <p>Quando a partida empata em 11 a 11, ninguém mais pode pedir Truco. A decisão e modalidade devem ser
+                    combinadas entre os jogadores:</p>
+                <ul>
+                    <li><strong>Escurinha (Para Equipes):</strong> Apenas o jogador da vez pode olhar as suas próprias
+                        cartas! Ele não pode mostrar nem falar qual carta tem para os parceiros (evitando sinais). O
+                        primeiro joga, o segundo olha e joga, e assim por diante.</li>
+                    <li><strong>Escurona (No Escuro Total):</strong> Ninguém olha as suas cartas em momento nenhum! Os
+                        jogadores escolhem uma carta na sorte, no escuro, e "chutam". A equipe que vencer o tombo de
+                        pura sorte, ganha a mão, e no final das 3 rodadas é avaliado o jogo todo para ver quem levou o
+                        jogo!</li>
+                </ul>
+        </div>
+        <button type="button" class="close-dialog wide">Entendido!</button>
+    </dialog>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
