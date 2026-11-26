@@ -50,7 +50,7 @@ const ORIGINAL_MP3 = [
 ];
 const nicknames = ['dieguito', 'zeu', 'zeus', 'galegao'];
 const cues = ['um_ponto', 'truco', 'seis', 'nove', 'doze', 'embaralhador', 'proximo_embaralhar', 'ganhou_partida'];
-const CACHE = 'truco-acker-teste-cache-v3.7';
+const CACHE = 'truco-acker-teste-cache-v3.8';
 const CORE = [
     './', './index.html', './styles.css', './app.js', './voice.js', './manifest.json',
     './icon-192.png', './icon-512.png', './audio/catalogo.js', './audio/nomes_francisca.mp3',
