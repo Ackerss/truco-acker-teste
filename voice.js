@@ -40,7 +40,8 @@ const recordedNicknames = new Set(['dieguito', 'zeu', 'zeus', 'galegao']);
 
 export function nicknamePhrase(name, cue, fallback) {
     const key = nameKey(name);
-    return recordedNicknames.has(key) ? ['apelidos/' + cue + '_' + key] : fallback;
+    const jacsonDealer = key === 'jacson' && (cue === 'embaralhador' || cue === 'proximo_embaralhar');
+    return recordedNicknames.has(key) || jacsonDealer ? ['apelidos/' + cue + '_' + key] : fallback;
 }
 
 export function localBrazilianVoice() {

@@ -50,11 +50,13 @@ const ORIGINAL_MP3 = [
 ];
 const nicknames = ['dieguito', 'zeu', 'zeus', 'galegao'];
 const cues = ['um_ponto', 'truco', 'seis', 'nove', 'doze', 'embaralhador', 'proximo_embaralhar', 'ganhou_partida'];
-const CACHE = 'truco-acker-teste-cache-v3.5';
+const CACHE = 'truco-acker-teste-cache-v3.6';
 const CORE = [
     './', './index.html', './styles.css', './app.js', './voice.js', './manifest.json',
     './icon-192.png', './icon-512.png', './audio/catalogo.js', './audio/nomes_francisca.mp3',
     ...nicknames.flatMap(name => cues.map(cue => './audio/apelidos/' + cue + '_' + name + '.mp3')),
+    './audio/apelidos/embaralhador_jacson.mp3', './audio/apelidos/proximo_embaralhar_jacson.mp3',
+    './audio/vez_de_embaralhar.mp3', './audio/proxima_vez_de_embaralhar.mp3',
     ...ORIGINAL_MP3.map(file => './audio/' + file),
 ];
 const scope = new URL(self.registration.scope);

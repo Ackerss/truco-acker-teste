@@ -189,6 +189,18 @@ function renderRules() {
     }
 }
 
+function matchScore(entry) {
+    return entry.sides.map(({ name }, index) => name + ' ' + entry.score[index]).join(' × ');
+}
+
+function currentSides() {
+    const players = state.players[state.mode];
+    return [0, 1].map(team => ({
+        name: teamName(team),
+        players: players.filter((_name, index) => index % 2 === team),
+    }));
+}
+
 function renderHistory() {
     const list = $('duration-history-list');
     if (list.dataset.historyCount === String(state.history.length) && list.dataset.latest === JSON.stringify(state.history.at(-1))) return;
@@ -199,7 +211,15 @@ function renderHistory() {
     const entries = document.createDocumentFragment();
     for (const entry of [...state.history].reverse()) {
         const item = document.createElement('li');
-        item.textContent = entry.name + ' venceu · ' + formatTime(entry.duration) + ' · ' + entry.mode + ' jogadores';
+        const result = document.createElement('strong');
+        result.textContent = entry.score && entry.sides ? matchScore(entry) : entry.name + ' venceu';
+        const details = document.createElement('span');
+        details.className = 'muted';
+        details.textContent = [
+            entry.score && entry.sides ? 'Vitória de ' + entry.name : 'Placar final indisponível',
+            formatTime(entry.duration), entry.mode + ' jogadores',
+        ].join(' · ');
+        item.append(result, details);
         entries.append(item);
     }
     list.replaceChildren(entries);
@@ -253,7 +273,8 @@ function dealerAudio(manual = false) {
     const index = state.round.dealer;
     const name = state.players[state.mode][index];
     const cue = manual ? 'proximo_embaralhar' : 'embaralhador';
-    return nicknamePhrase(name, cue, [cue, ...voiceFor(name, 'jogador_' + (index + 1))]);
+    const ending = manual ? 'proxima_vez_de_embaralhar' : 'vez_de_embaralhar';
+    return nicknamePhrase(name, cue, [...voiceFor(name, 'jogador_' + (index + 1)), ending]);
 }
 
 function teamAudio(team) {
@@ -278,7 +299,10 @@ function scorePoint(team, amount, ran = false) {
         round.winner = team;
         round.ended = now;
         state.wins[team]++;
-        state.history.push({ winner: team, name: teamName(team), mode: state.mode, duration: roundDuration(round, now) });
+        state.history.push({
+            winner: team, name: teamName(team), mode: state.mode, duration: roundDuration(round, now),
+            score: [...round.score], sides: currentSides(),
+        });
         const victory = state.mode === 4 ? 'ganharam_partida' : 'ganhou_partida';
         commit('Vitória de ' + teamName(team) + '.', nicknamePhrase(teamName(team), 'ganhou_partida', [...teamAudio(team), victory]));
         return;
@@ -291,7 +315,7 @@ function scorePoint(team, amount, ran = false) {
     const points = amount === 1 ? 'Um ponto' : amount + ' pontos';
     const action = ran ? message : points + ' para ' + teamName(team) + '.';
     const next = rule.type === 'decision' ? 'Mão de onze. ' + teamName(rule.team) + ' decide se aceita ou corre.'
-        : rule.type === 'dark' ? 'Escurinha.' : 'Embaralhador, ' + state.players[state.mode][round.dealer] + '.';
+        : rule.type === 'dark' ? 'Escurinha.' : state.players[state.mode][round.dealer] + ' é quem embaralha.';
     commit(message, audio, action + ' ' + next);
 }
 
@@ -536,21 +560,28 @@ function changeMode() {
     $('options-dialog').close();
 }
 
-function historyText(limit) {
+function historyText(limit, forWhatsApp = false) {
     syncState();
-    const entries = state.history.slice(Math.max(0, state.history.length - limit));
-    const lines = [
-        'Truco Acker · ' + state.mode + ' jogadores',
-        teamName(0) + ' ' + state.round.score[0] + ' × ' + state.round.score[1] + ' ' + teamName(1),
-        'Partidas ganhas: ' + state.wins.join(' × '),
-    ];
-    if (state.mode === 4) {
-        const names = state.players[4];
-        lines.push(teamName(0) + ': ' + names[0] + ' e ' + names[2], teamName(1) + ': ' + names[1] + ' e ' + names[3]);
+    const bold = value => forWhatsApp ? '*' + value.replaceAll('*', '∗') + '*' : value;
+    const first = Math.max(0, state.history.length - limit);
+    const entries = state.history.slice(first);
+    const sides = currentSides();
+    const lineup = teams => teams.map(({ name, players }) => bold(name) + ' — ' + players.join(' e '));
+    const wins = sides.map(({ name }, index) => name + ' ' + state.wins[index]).join(' × ');
+    const lines = [bold('Truco Acker'), '', bold('Partidas ganhas'), wins];
+    if (state.round.winner === null && state.round.started !== null) {
+        lines.push('', bold('Placar em andamento'), matchScore({ sides, score: state.round.score }));
     }
+    if (state.mode === 4) lines.push('', bold('Duplas atuais'), ...lineup(sides));
     if (entries.length) {
-        lines.push('', entries.length < state.history.length ? 'Últimas ' + entries.length + ' partidas' : 'Partidas concluídas');
-        for (const entry of entries) lines.push(entry.name + ' venceu · ' + formatTime(entry.duration) + ' · ' + entry.mode + ' jogadores');
+        lines.push('', bold(first ? 'Últimas ' + entries.length + ' partidas' : 'Partidas concluídas'));
+        for (const [index, entry] of entries.entries()) {
+            lines.push('', bold('Partida ' + (first + index + 1)));
+            if (entry.score && entry.sides) lines.push(bold(matchScore(entry)));
+            lines.push(entry.name + ' venceu · ' + formatTime(entry.duration) + ' · ' + entry.mode + ' jogadores');
+            if (!entry.score) lines.push('Placar final indisponível');
+            if (entry.mode === 4 && entry.sides) lines.push(...lineup(entry.sides));
+        }
     }
     return lines.join('\n');
 }
@@ -671,7 +702,7 @@ $('sound-toggle-btn').addEventListener('click', () => {
 });
 $('copy-history-btn').addEventListener('click', () => copyText(historyText(Infinity), 'history-message', 'Resumo copiado.'));
 $('export-history-btn').addEventListener('click', () => {
-    window.open('https://wa.me/?text=' + encodeURIComponent(historyText(10)), '_blank', 'noopener,noreferrer');
+    window.open('https://wa.me/?text=' + encodeURIComponent(historyText(10, true)), '_blank', 'noopener,noreferrer');
 });
 $('share-app-btn').addEventListener('click', shareApp);
 $('install-btn').addEventListener('click', installApp);

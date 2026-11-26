@@ -182,7 +182,9 @@ strong { font-weight: 750; }
 .history-count { font-weight: 500; }
 .history-content { display: grid; gap: 8px; padding: 0 10px 10px; font-size: .9rem; }
 .history-content ol { margin: 0; padding-inline-start: 1.75rem; max-height: 14rem; overflow: auto; }
-.history li { padding: 3px 0; overflow-wrap: anywhere; }
+.history li { padding: 5px 0; overflow-wrap: anywhere; }
+.history li + li { border-top: 1px solid var(--border); }
+.history li > * { display: block; }
 footer { text-align: center; color: var(--muted); font-size: .72rem; margin: 4px 0 1px; }
 
 dialog {
