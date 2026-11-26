@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atualizar Truco Acker</title>
+<style>
+    :root { color-scheme: light dark; }
+    body { margin: 0 auto; padding: 2rem 1rem; max-width: 28rem; font: 1rem/1.5 system-ui; }
+    a { display: inline-block; padding-block: .65rem; }
+</style>
+</head>
+<body>
+<h1>Atualizar Truco Acker</h1>
+<p id="status" role="status">Baixando a versão mais recente…</p>
+<a href="./" id="open" hidden>Abrir o placar</a>
+<script>
+    function waitForState(worker, states) {
+        return new Promise((resolve, reject) => {
+            function check() {
+                if (worker.state === 'redundant' || states.includes(worker.state)) {
+                    worker.removeEventListener('statechange', check);
+                    if (worker.state === 'redundant') reject(new Error('Atualização interrompida'));
+                    else resolve();
+                }
+            }
+            worker.addEventListener('statechange', check);
+            check();
+        });
+    }
+
+    async function update() {
+        const registration = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
+        await registration.update();
+        const worker = registration.installing || registration.waiting;
+        if (worker) {
+            await waitForState(worker, ['installed', 'activating', 'activated']);
+            if (worker.state === 'installed') worker.postMessage('ACTIVATE_UPDATE');
+            await waitForState(worker, ['activated']);
+        } else if (registration.active?.state === 'activating') {
+            await waitForState(registration.active, ['activated']);
+        }
+        const active = registration.active;
+        if (!active || active.state !== 'activated') throw new Error('Atualização incompleta');
+        location.replace('./');
+    }
+
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Tempo esgotado')), 35000);
+    });
+    Promise.race([update(), timeout]).catch(() => {
+        document.querySelector('#status').textContent = 'A atualização ainda não terminou. Verifique a internet e recarregue esta página.';
+        document.querySelector('#open').hidden = false;
+    }).finally(() => clearTimeout(timer));
+</script>
+</body>
+</html>

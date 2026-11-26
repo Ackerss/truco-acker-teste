@@ -40,8 +40,10 @@ const recordedNicknames = new Set(['dieguito', 'zeu', 'zeus', 'galegao']);
 
 export function nicknamePhrase(name, cue, fallback) {
     const key = nameKey(name);
-    const jacsonDealer = key === 'jacson' && (cue === 'embaralhador' || cue === 'proximo_embaralhar');
-    return recordedNicknames.has(key) || jacsonDealer ? ['apelidos/' + cue + '_' + key] : fallback;
+    const dealerCue = cue === 'embaralhador' || cue === 'proximo_embaralhar';
+    const recordedDealer = dealerCue && (key === 'jacson' || /^jogador [1-4]$/.test(key));
+    return recordedNicknames.has(key) || recordedDealer
+        ? ['apelidos/' + cue + '_' + key.replaceAll(' ', '_')] : fallback;
 }
 
 export function localBrazilianVoice() {
