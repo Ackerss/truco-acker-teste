@@ -68,7 +68,7 @@
 
         <div class="game-actions">
             <button type="button" id="undo-button" disabled>↶ Desfazer</button>
-            <button type="button" id="next-hand-btn" class="primary" hidden>Próxima mão</button>
+            <button type="button" id="correct-score-btn">Corrigir placar</button>
             <button type="button" id="new-game-btn" class="primary" hidden>Próxima partida</button>
         </div>
         <p id="game-message" class="sr-only" role="status" aria-atomic="true"></p>
@@ -118,7 +118,7 @@
             <button type="button" id="reset-game-btn">Reiniciar partida</button>
             <button type="button" id="reset-all-btn" class="danger">Zerar placar e histórico</button>
         </div>
-        <p class="notice">Versão 3.8</p>
+        <p class="notice">Versão 3.9</p>
         <p id="offline-status" class="notice" role="status">Verificando disponibilidade offline…</p>
         <p id="options-message" class="notice" role="status" hidden></p>
     </dialog>
@@ -136,6 +136,29 @@
                 <button type="submit" id="names-submit" class="primary">Salvar</button>
             </div>
             <p id="name-message" class="notice" role="status" hidden></p>
+        </form>
+    </dialog>
+
+    <dialog id="score-correction" aria-labelledby="correction-title">
+        <div class="dialog-header">
+            <h2 id="correction-title">Corrigir placar</h2>
+            <button type="button" class="icon-button close-dialog" aria-label="Fechar correção">×</button>
+        </div>
+        <form id="score-correction-form" class="option-group">
+            <p class="notice">Se o novo placar tiver uma equipe com 11, a escolha da mão abre de novo.</p>
+            <div class="name-field">
+                <label id="correct-label-0" for="correct-score-0">Nós</label>
+                <input id="correct-score-0" type="number" inputmode="numeric" min="0" max="12" step="1" required>
+            </div>
+            <div class="name-field">
+                <label id="correct-label-1" for="correct-score-1">Eles</label>
+                <input id="correct-score-1" type="number" inputmode="numeric" min="0" max="12" step="1" required>
+            </div>
+            <p id="correction-message" class="notice" role="status" hidden></p>
+            <div class="secondary-actions">
+                <button type="button" class="close-dialog">Cancelar</button>
+                <button type="submit" class="primary">Salvar placar</button>
+            </div>
         </form>
     </dialog>
 

@@ -3,6 +3,7 @@ import { announce, stopAudio, voiceFor, nicknamePhrase, localBrazilianVoice, NAM
 const SESSION_KEY = 'truco_acker_teste_session_v3';
 const POINTS_AUDIO = { 1: 'um_ponto', 3: 'truco', 6: 'seis', 9: 'nove', 12: 'doze' };
 const MAX_SCORE = 12;
+const HAND_TAP_DELAY = 900;
 const $ = id => document.getElementById(id);
 const scoreButtons = [...document.querySelectorAll('.controls button')];
 const scoreGroups = [...document.querySelectorAll('[data-team-controls]')];
@@ -13,14 +14,14 @@ const defaultTeams = ['Nós', 'Eles'];
 const defaults = count => Array.from({ length: count }, (_, index) => 'Jogador ' + (index + 1));
 
 function newRound(dealer = 0) {
-    return { score: [0, 0], previous: null, dealer, started: null, ended: null, winner: null, accepted: false, waitingForNextHand: false };
+    return { score: [0, 0], previous: null, dealer, started: null, ended: null, winner: null, accepted: false, decisionAvailableAt: 0 };
 }
 
 function initialState() {
     return {
         version: 3, settings: { theme: 'dark', sound: true, largeText: false },
         mode: 4, teams: [...defaultTeams], players: { 2: defaults(2), 4: defaults(4) },
-        round: newRound(), wins: [0, 0], history: [], undo: null, setupDone: false,
+        round: newRound(), wins: [0, 0], history: [], undo: [], setupDone: false,
     };
 }
 
@@ -70,9 +71,16 @@ function loadLegacy() {
     return data;
 }
 
-function loadState() {
+function readSession() {
     const stored = readStored(SESSION_KEY);
-    return stored?.version === 3 && stored.round && stored.settings && stored.players ? stored : initialState();
+    if (stored?.version !== 3 || !stored.round || !stored.settings || !stored.players) return null;
+    if (!Array.isArray(stored.undo)) stored.undo = stored.undo ? [stored.undo] : [];
+    delete stored.round.waitingForNextHand;
+    return stored;
+}
+
+function loadState() {
+    return readSession() ?? initialState();
 }
 
 let state = loadState();
@@ -83,11 +91,11 @@ let installPrompt = null;
 let updateWorker = null;
 let reloadForUpdate = false;
 let nameEdit = null;
+let correctionVersion;
 
 function syncState() {
     if (canSync) {
-        const stored = readStored(SESSION_KEY);
-        if (stored?.version === 3 && stored.round && stored.settings && stored.players) state = stored;
+        state = readSession() ?? state;
     }
 }
 
@@ -108,7 +116,6 @@ function teamName(team) {
 function currentRule() {
     if (state.round.winner !== null) return { type: 'finished', team: state.round.winner };
     const onEleven = state.round.score.map(score => score === 11);
-    if (state.round.waitingForNextHand) return { type: 'between-hands', dark: onEleven.every(Boolean) };
     if (onEleven.every(Boolean)) return { type: 'dark' };
     if (onEleven.some(Boolean)) return { type: state.round.accepted ? 'accepted' : 'decision', team: onEleven.indexOf(true) };
     return { type: 'normal' };
@@ -134,6 +141,11 @@ function tick() {
     const value = formatTime(roundDuration(state.round));
     const timer = $('current-timer-display');
     if (timer.textContent !== value) timer.textContent = value;
+    if (!$('hand-decision').hidden && $('accept-hand').disabled && !handDecisionLocked()) renderRules();
+}
+
+function handDecisionLocked() {
+    return Date.now() < state.round.decisionAvailableAt;
 }
 
 function render() {
@@ -145,7 +157,8 @@ function render() {
     }
     $('match-wins-display').setAttribute('aria-label', teamName(0) + ' ' + state.wins[0] + ', ' + teamName(1) + ' ' + state.wins[1]);
     $('current-dealer-name').textContent = state.players[state.mode][dealer];
-    $('undo-button').disabled = state.undo === null;
+    $('undo-button').disabled = state.undo.length === 0;
+    $('correct-score-btn').hidden = winner !== null;
     $('new-game-btn').hidden = winner === null;
     $('prev-score-display').textContent = previous ? previous.join(' × ') : '—';
     $('edit-teams-btn').hidden = state.mode === 2;
@@ -161,8 +174,10 @@ function renderRules() {
     const rule = currentRule();
     $('rule-banner').hidden = rule.type === 'normal';
     $('hand-decision').hidden = rule.type !== 'decision';
-    $('next-hand-btn').hidden = rule.type !== 'between-hands';
-    $('next-dealer-btn').disabled = ['finished', 'between-hands', 'accepted'].includes(rule.type);
+    const decisionLocked = rule.type === 'decision' && handDecisionLocked();
+    $('accept-hand').disabled = decisionLocked;
+    $('decline-hand').disabled = decisionLocked;
+    $('next-dealer-btn').disabled = ['finished', 'accepted'].includes(rule.type) || decisionLocked;
     const title = $('rule-title');
     const description = $('rule-description');
     if (rule.type === 'finished') {
@@ -171,19 +186,17 @@ function renderRules() {
     } else if (rule.type === 'dark') {
         title.textContent = 'Escurinha';
         description.textContent = '11 a 11. A mão vale um ponto, sem truco.';
-    } else if (rule.type === 'between-hands') {
-        title.textContent = rule.dark ? 'Escurinha · 11 a 11' : 'Mão de 11 encerrada';
-        description.textContent = 'Placar atualizado. Toque em Próxima mão para continuar.';
     } else if (rule.type === 'accepted') {
         title.textContent = 'Mão de 11 aceita';
         description.textContent = 'Marque três pontos para quem vencer a mão.';
     } else if (rule.type === 'decision') {
         title.textContent = 'Mão de 11 · ' + teamName(rule.team);
-        description.textContent = 'Se correr, ' + teamName(1 - rule.team) + ' ganha um ponto.';
+        description.textContent = decisionLocked ? 'Ponto registrado. Aguarde a próxima decisão.'
+            : 'Se correr, ' + teamName(1 - rule.team) + ' ganha um ponto.';
     }
     for (const group of scoreGroups) {
         group.dataset.single = String(rule.type === 'dark' || rule.type === 'accepted');
-        group.hidden = ['decision', 'finished', 'between-hands'].includes(rule.type);
+        group.hidden = rule.type === 'decision' || rule.type === 'finished';
     }
     for (const button of scoreButtons) {
         const team = Number(button.dataset.team);
@@ -251,12 +264,13 @@ function commit(message, audio = [], sentence = message) {
     const trigger = document.activeElement;
     saveState();
     render();
-    if (trigger?.matches('.controls button, #hand-decision button, #next-hand-btn') &&
+    if (trigger?.matches('.controls button, #hand-decision button') &&
         (trigger.disabled || !trigger.getClientRects().length)) {
         const rule = currentRule();
         if (rule.type === 'finished') $('new-game-btn').focus();
-        else if (rule.type === 'between-hands') $('next-hand-btn').focus();
-        else if (rule.type === 'decision') $('accept-hand').focus();
+        else if (rule.type === 'decision') {
+            $(handDecisionLocked() ? 'undo-button' : 'accept-hand').focus();
+        }
         else scoreButtons.find(button => !button.disabled && !button.hidden)?.focus();
     }
     postStatus(message);
@@ -264,11 +278,11 @@ function commit(message, audio = [], sentence = message) {
 }
 
 function snapshot() {
-    state.undo = {
+    state.undo.push({
         round: { ...state.round },
         wins: [...state.wins],
         historyLength: state.history.length,
-    };
+    });
 }
 
 function nextDealer() {
@@ -294,7 +308,7 @@ function scorePoint(team, amount, ran = false) {
     if (amount > 0 && round.started === null) round.started = now;
     round.previous = round.score;
     round.score = round.score.map((value, index) => index === team ? Math.min(MAX_SCORE, value + amount) : value);
-    round.waitingForNextHand = (ran || round.accepted) && round.score[team] < MAX_SCORE;
+    round.decisionAvailableAt = ran && round.score[team] < 11 ? now + HAND_TAP_DELAY : 0;
     round.accepted = false;
     if (amount > 0) nextDealer();
     let audio = ran ? ['correu'] : [];
@@ -303,15 +317,7 @@ function scorePoint(team, amount, ran = false) {
         audio = nicknamePhrase(teamName(team), cue, [cue, 'para', ...teamAudio(team)]);
     }
     if (round.score[team] === MAX_SCORE) {
-        round.winner = team;
-        round.ended = now;
-        state.wins[team]++;
-        state.history.push({
-            winner: team, name: teamName(team), mode: state.mode, duration: roundDuration(round, now),
-            score: [...round.score], sides: currentSides(),
-        });
-        const victory = state.mode === 4 ? 'ganharam_partida' : 'ganhou_partida';
-        commit('Vitória de ' + teamName(team) + '.', nicknamePhrase(teamName(team), 'ganhou_partida', [...teamAudio(team), victory]));
+        finishRound(team, now);
         return;
     }
     const rule = currentRule();
@@ -326,6 +332,63 @@ function scorePoint(team, amount, ran = false) {
     commit(message, audio, action + ' ' + next);
 }
 
+function finishRound(team, now) {
+    const round = state.round;
+    round.winner = team;
+    round.ended = now;
+    state.wins[team]++;
+    state.history.push({
+        winner: team, name: teamName(team), mode: state.mode, duration: roundDuration(round, now),
+        score: [...round.score], sides: currentSides(),
+    });
+    const victory = state.mode === 4 ? 'ganharam_partida' : 'ganhou_partida';
+    commit('Vitória de ' + teamName(team) + '.', nicknamePhrase(teamName(team), 'ganhou_partida', [...teamAudio(team), victory]));
+}
+
+function openScoreCorrection() {
+    syncState();
+    if (state.round.winner !== null) return;
+    correctionVersion = JSON.stringify([state.mode, state.round]);
+    for (const team of [0, 1]) {
+        $('correct-label-' + team).textContent = teamName(team);
+        $('correct-score-' + team).value = state.round.score[team];
+    }
+    setNotice('correction-message', '');
+    $('score-correction').showModal();
+}
+
+function correctScore(event) {
+    event.preventDefault();
+    syncState();
+    if (correctionVersion !== JSON.stringify([state.mode, state.round])) {
+        setNotice('correction-message', 'O placar mudou. Feche e abra a correção de novo.');
+        return;
+    }
+    const score = [0, 1].map(team => $('correct-score-' + team).valueAsNumber);
+    if (score.some(points => !Number.isInteger(points) || points < 0 || points > MAX_SCORE) ||
+        score.every(points => points === MAX_SCORE)) {
+        setNotice('correction-message', 'Use de 0 a 12 pontos. Apenas um lado pode chegar a 12.');
+        return;
+    }
+    $('score-correction').close();
+    const round = state.round;
+    if (score.every((points, team) => points === round.score[team])) return;
+    snapshot();
+    round.previous = round.score;
+    round.score = score;
+    round.accepted = false;
+    round.decisionAvailableAt = 0;
+    const now = Date.now();
+    if (round.started === null && score.some(Boolean)) round.started = now;
+    const winner = score.indexOf(MAX_SCORE);
+    if (winner !== -1) {
+        finishRound(winner, now);
+        $('new-game-btn').focus();
+    } else {
+        commit('Placar corrigido.');
+    }
+}
+
 function changeScore(team, amount) {
     syncState();
     if (!pointVisible(currentRule().type, amount) || state.round.score[team] + amount < 0) return;
@@ -336,7 +399,7 @@ function changeScore(team, amount) {
 function decideHand(accept) {
     syncState();
     const rule = currentRule();
-    if (rule.type !== 'decision') return;
+    if (rule.type !== 'decision' || handDecisionLocked()) return;
     snapshot();
     if (accept) {
         state.round.accepted = true;
@@ -347,38 +410,26 @@ function decideHand(accept) {
     }
 }
 
-function startNextHand() {
-    syncState();
-    if (currentRule().type !== 'between-hands') return;
-    state.round.waitingForNextHand = false;
-    const rule = currentRule();
-    if (rule.type === 'dark') {
-        commit('Próxima mão. Escurinha.', ['escurinha']);
-    } else {
-        const name = teamName(rule.team);
-        commit('Próxima mão.', ['mao_de_11', ...teamAudio(rule.team), 'decidir_mao_11'],
-            'Mão de onze. ' + name + ' decide se aceita ou corre.');
-    }
-}
-
 function undo() {
     syncState();
-    if (!state.undo) return;
-    const { round, wins, historyLength } = state.undo;
-    state.round = round;
-    state.wins = wins;
-    state.history.length = historyLength;
-    state.undo = null;
+    const previous = state.undo.pop();
+    if (!previous) return;
+    state.round = previous.round;
+    delete state.round.waitingForNextHand;
+    state.wins = previous.wins;
+    state.history.length = previous.historyLength;
     commit('Ação desfeita.', ['acao_desfeita']);
-    if (currentRule().type === 'decision') $('accept-hand').focus();
-    else scoreButtons.find(button => !button.hidden && !button.disabled)?.focus();
+    if (!state.undo.length) {
+        if (currentRule().type === 'decision' && !handDecisionLocked()) $('accept-hand').focus();
+        else $('correct-score-btn').focus();
+    }
 }
 
 function nextGame() {
     syncState();
     if (state.round.winner === null) return;
     state.round = newRound(state.round.dealer);
-    state.undo = null;
+    state.undo = [];
     commit('Nova partida. Placar zerado.');
     scoreButtons[0].focus();
 }
@@ -550,7 +601,7 @@ function restartMatch() {
     if (!confirm('Reiniciar esta partida? As vitórias e o histórico serão mantidos.')) return;
     syncState();
     state.round = newRound(state.round.dealer);
-    state.undo = null;
+    state.undo = [];
     commit('Partida reiniciada.', ['jogo_reiniciado']);
     $('options-dialog').close();
 }
@@ -561,7 +612,7 @@ function resetAll() {
     state.round = newRound();
     state.wins = [0, 0];
     state.history = [];
-    state.undo = null;
+    state.undo = [];
     commit('Placar e histórico zerados.');
     $('options-dialog').close();
 }
@@ -575,7 +626,7 @@ function changeMode() {
     state.mode = nextMode;
     state.round = newRound();
     state.wins = [0, 0];
-    state.undo = null;
+    state.undo = [];
     commit('Modo de ' + nextMode + ' jogadores.');
     $('options-dialog').close();
 }
@@ -684,7 +735,8 @@ $('options-btn').addEventListener('click', () => {
 });
 $('accept-hand').addEventListener('click', () => decideHand(true));
 $('decline-hand').addEventListener('click', () => decideHand(false));
-$('next-hand-btn').addEventListener('click', startNextHand);
+$('correct-score-btn').addEventListener('click', openScoreCorrection);
+$('score-correction-form').addEventListener('submit', correctScore);
 // A held Enter must not activate the next button after the focus moves.
 document.querySelector('.scoreboard').addEventListener('keydown', event => {
     if (event.repeat && event.key === 'Enter' &&
@@ -696,7 +748,7 @@ $('undo-button').addEventListener('click', undo);
 $('new-game-btn').addEventListener('click', nextGame);
 $('next-dealer-btn').addEventListener('click', () => {
     syncState();
-    if (['finished', 'between-hands', 'accepted'].includes(currentRule().type)) return;
+    if (['finished', 'accepted'].includes(currentRule().type) || handDecisionLocked()) return;
     snapshot();
     nextDealer();
     commit(state.players[state.mode][state.round.dealer] + ' é o próximo embaralhador.', dealerAudio(true));
